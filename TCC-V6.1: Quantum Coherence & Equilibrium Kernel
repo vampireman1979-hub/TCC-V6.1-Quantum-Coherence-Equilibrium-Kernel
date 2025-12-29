@@ -1,0 +1,83 @@
+"""
+TCC-V6.1: Quantum Coherence & Equilibrium Kernel
+Anchored, symmetric, invariant-layer quantum kernel.
+
+T_A(chi) = 300 + 20 * exp(-chi / 10^4)
+Only the decaying term is encoded as phase rotations.
+"""
+
+import numpy as np
+from qiskit import QuantumCircuit
+
+
+def run_quantum_patch(chi_value: float) -> QuantumCircuit:
+    """
+    Build a 5-qubit circuit encoding the decaying term of T_A(chi)
+    as symmetric Rz rotations around a central anchor qubit.
+    
+    Structure (matches 🪞💠🌌♐🌌💠🪞):
+
+        Invariant Layer (inner): q1, q3
+        Field Layer (outer):     q0, q4
+        Anchor:                  q2
+        Directional Operator:    primary rotation on inner layer
+        Overlay:                 secondary rotation on outer layer
+
+    Qubit layout
+    ------------
+        q0 (outer L)     q4 (outer R)
+              \             /
+           q1 (inner L)  q3 (inner R)
+                    \   /
+                  q2 (anchor)
+    """
+    qc = QuantumCircuit(5)
+
+    # Assign qubit roles
+    left_outer = 0
+    left_inner = 1
+    anchor = 2
+    right_inner = 3
+    right_outer = 4
+
+    # 🪞 Mirror boundary is implicit in symmetric operations
+
+    # 💠 Invariant layer: anchor prepares symmetric base state
+    qc.h(anchor)
+
+    # 🌌 Field: propagate anchor state outward to inner symmetric nodes
+    qc.cx(anchor, left_inner)
+    qc.cx(anchor, right_inner)
+
+    # Compute exponential decay term
+    decay_term = 20.0 * np.exp(-chi_value / 10_000.0)
+
+    # Primary rotation angle (directional operator)
+    theta_primary = (decay_term / 320.0) * (2.0 * np.pi)
+
+    # ♐ Directional operator applied to invariant layer
+    qc.rz(theta_primary, left_inner)
+    qc.rz(theta_primary, right_inner)
+
+    # 🌌 Field: propagate transformation outward to outer symmetric nodes
+    qc.cx(left_inner, left_outer)
+    qc.cx(right_inner, right_outer)
+
+    # 💠 Invariant (outer layer): scaled rotation to preserve symmetry
+    theta_secondary = 0.5 * theta_primary
+    qc.rz(theta_secondary, left_outer)
+    qc.rz(theta_secondary, right_outer)
+
+    # 🪞 Mirror: optional anchor correction to close symmetry
+    qc.rz(theta_secondary, anchor)
+
+    # Measurement
+    qc.measure_all()
+
+    return qc
+
+
+if __name__ == "__main__":
+    circuit = run_quantum_patch(chi_value=100_000.0)
+    print("Circuit generated successfully.")
+    print(circuit.draw())
